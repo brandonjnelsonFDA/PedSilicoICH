@@ -28,5 +28,5 @@ Dr. Elena Sizikova also built a `pipeline for comparative evaluation of digital 
 Useful Links
 ------------
 
-- `REALYSM_PedCT <https://github.com/bnel1201/REALYSM_PedCT/tree/PedSilicoICH-Pilot>`_: CT simulation pipeline that we aim to build off of for this project (in particular the `PedSilicoICH-Pilot` branch used to make the pilot data images shown in `Methods`)
+- `REALYSM_PedCT: pedsilico-pilot.ipynb <https://github.com/bnel1201/REALYSM_PedCT/blob/PedSilicoICH-Pilot/pedsilico-pilot.ipynb>`_: CT simulation pipeline that we aim to build off of for this project, in particular this notebook was used to make the pilot data images shown in `Methods`)
 - `pediatricIQphantoms: running_simulations.ipynb <https://github.com/bnel1201/pediatricIQphantoms/blob/main/examples/running_simulations.ipynb>`_: examples of using a Python wrapper around the `Michigan Image Reconstruction Toolbox (MIRT) <https://github.com/JeffFessler/mirt>`_ for simple, faster CT simulations
