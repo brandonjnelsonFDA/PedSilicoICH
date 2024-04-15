@@ -28,9 +28,9 @@ Dr. Elena Sizikova also built a `pipeline for comparative evaluation of digital 
 Installation
 ------------
 
-```bash
-pip install -r notebooks/requirements.txt
-```
+.. code-block:: bash
+
+        pip install -r notebooks/requirements.txt
 
 Tested on python 3.11.3
 
