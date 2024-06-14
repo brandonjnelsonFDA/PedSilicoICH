@@ -31,6 +31,10 @@ Installation
 .. code-block:: bash
 
         pip install -r notebooks/requirements.txt
+        git clone https://github.com/bnel1201/Virtual-Patient-CT-Simulations
+        pip install -e ./Virtual-Patient-CT-Simulations
+
+https://github.com/bnel1201/Virtual-Patient-CT-Simulations contains the XCIST simulation code
 
 Tested on python 3.11.3
 
