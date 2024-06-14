@@ -2,3 +2,7 @@ numpy
 matplotlib
 pandas
 ipywidgets
+pydicom
+seaborn
+gecatsim
+nibabel
