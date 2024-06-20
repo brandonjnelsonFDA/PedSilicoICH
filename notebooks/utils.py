@@ -151,7 +151,7 @@ class CTobj():
         self.groundtruth=None
         self.patient_diameter = 18
         
-        self.xcist = initialize_xcist(self.phantom, self.spacings, output_dir='default',
+        self.xcist = initialize_xcist(self.phantom, self.spacings, output_dir=self.output_dir,
                                       phantom_id=patientid, kVp=self.kVp)
         self.start_positions = self.calculate_start_positions()
 
@@ -174,6 +174,7 @@ class CTobj():
         :param startZ: optional starting table position in mm of the scan, see self.start_positions
         :param endZ: optional last position of scan in mm, see self.start_positions
         '''
+        self.start_positions = self.calculate_start_positions(slice_thickness)
         start_positions = self.calculate_start_positions(slice_thickness)
         if startZ is not None:
             if startZ < start_positions.min():
@@ -185,7 +186,7 @@ class CTobj():
             start_positions = start_positions[start_positions<endZ]
 
         plt.imshow(self.phantom.sum(axis=1)[::-1], cmap='gray', origin='upper', extent=[-self.phantom.shape[0]*self.spacings[0]/2, self.phantom.shape[0]*self.spacings[0]/2,
-                                                                                        self.start_positions[-1], self.start_positions[0]])
+                                                                                        self.start_positions[-1], self.start_positions[-1]+self.total_scan_length])
         plt.hlines(y=start_positions[0], xmin=-self.phantom.shape[0]*self.spacings[0]/2, xmax=self.phantom.shape[0]*self.spacings[0]/2, color='red')
         plt.annotate('Start', (0, start_positions[0]-10), horizontalalignment='center')
         
@@ -225,16 +226,18 @@ class CTobj():
         if kVp not in kVp_options:
             raise ValueError(f'Selected kVP [{kVp}] not available, please choose from {kVp_options}')
         self.xcist.cfg.protocol.spectrumFilename = f'tungsten_tar7.0_{kVp}_filt.dat'
-
+        
         self.start_positions = self.calculate_start_positions(slice_thickness)
+        start_positions = self.start_positions
+        
         if startZ:
-            if startZ < self.start_positions.min():
+            if startZ < start_positions.min():
                 raise ValueError(f'startZ is outside the range of valid start positions: {self.start_positions}')
-            self.start_positions = self.start_positions[self.start_positions>startZ]
+            start_positions = start_positions[start_positions>startZ]
         if endZ:
-            if endZ > self.start_positions.max():
+            if endZ > start_positions.max():
                 raise ValueError(f'startZ is outside the range of valid start positions: {self.start_positions}')
-            self.start_positions = self.start_positions[self.start_positions<endZ]
+            start_positions = start_positions[start_positions<endZ]
 
         if views:
             self.xcist.cfg.protocol.viewCount = views
@@ -248,9 +251,9 @@ class CTobj():
         self.xcist.cfg.experimentDirectory = str(self.results_dir)
         
         recons = []
-        for idx, table_position in enumerate(self.start_positions):
-            print(f'scan: {idx+1}/{len(self.start_positions)}')
-
+        for idx, table_position in enumerate(start_positions):
+            print(f'scan: {idx+1}/{len(start_positions)}')
+            self.xcist.resultsName = str(self.results_dir / f'{idx:03d}_{mA}mA_{kVp}kV') #keep projection data from each scan
             self.xcist.protocol.startZ = table_position
             self.xcist.run_all()
             self.run_recon(sliceThickness=slice_thickness)
@@ -259,14 +262,16 @@ class CTobj():
         return self
 
     def run_recon(self, fov=None, sliceThickness=None, sliceCount=None, mu_water=None, preview=False):
-
+        if sliceThickness:
+            self.xcist.recon.sliceThickness = sliceThickness
         if mu_water:
-            ct.cfg.recon.mu = mu_water
+            self.xcist.cfg.recon.mu = mu_water
         if not sliceCount:
             detector_width = self.xcist.scanner.detectorRowCount * self.xcist.scanner.detectorRowSize
             magnification = self.xcist.scanner.sdd / self.xcist.scanner.sid
             detector_width_at_isocenter = detector_width / magnification
-            valid_slices = int(detector_width_at_isocenter // self.xcist.recon.sliceThickness - 2) # remove one at each end to avoid cone beam artifacts
+            safe_width_at_isocenter = detector_width_at_isocenter - 2*self.xcist.scanner.detectorRowSize
+            valid_slices = int(safe_width_at_isocenter // self.xcist.recon.sliceThickness)
             self.xcist.cfg.recon.sliceCount = valid_slices
         else:
             self.xcist.cfg.recon.sliceCount = sliceCount
@@ -316,7 +321,7 @@ class CTobj():
         del(ds.ContrastBolusRoute)
         del(ds.ContrastBolusAgent)
         ds.ImageComments = f"effctive diameter [cm]: {self.patient_diameter/10}"
-        ds.ScanOptions = self.xcist.cfg.protocol.scanTrajectory
+        ds.ScanOptions = self.xcist.cfg.protocol.scanTrajectory.upper()
         ds.ReconstructionDiameter = self.xcist.cfg.recon.fov
         ds.ConvolutionKernel = self.xcist.cfg.recon.kernelType
         ds.Exposure = self.xcist.cfg.protocol.mA
@@ -373,3 +378,18 @@ class CTobj():
             fnames.append(dcm_fname)
             pydicom.write_file(dcm_fname, ds)
         return fnames
+
+def center_crop(img, thresh=-800, rows=True, cols=True):
+    cropped = img[img.mean(axis=1)>thresh, :]
+    cropped = cropped[:, img.mean(axis=0)>thresh]
+    return cropped
+
+def center_crop_like(img, ref, thresh=-800):
+    cropped = img[ref.mean(axis=1)>thresh, :]
+    cropped = cropped[:, ref.mean(axis=0)>thresh]
+    return cropped
+
+from ipywidgets import interact, IntSlider
+
+def scrollview(phantom):
+    interact(lambda idx: ctshow(phantom[idx]), idx=IntSlider(value=phantom.shape[0]//2, min=0, max=phantom.shape[0]-1))

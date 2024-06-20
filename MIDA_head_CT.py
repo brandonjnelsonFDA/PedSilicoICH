@@ -39,11 +39,12 @@ brain_mask = ground_truth_image==material_lut.loc[material_lut['xcist material']
 img_w_lesion, lesion_image, lesion_coords = add_random_sphere_lesion(ground_truth_image, brain_mask, radius=radius, contrast=contrast)
 # %%
 ct = CTobj(img_w_lesion, spacings=(dz, dx, dy), patientname='MIDA Head',
-                      studyname='full volume long scan', output_dir='MIDA_head')
+                      studyname='full volume long scan', output_dir='MIDA Head')
 # %%
-ct.scout_view(startZ=-95, endZ=95)
+ct.scout_view(startZ=-95, endZ=50)
 # %%
-ct.run_scan(startZ=-95, endZ=75)
+ct.run_scan(startZ=-95, endZ=50, views=1000)
 # %%
-dicom_path = Path(ct.patientname)/ 'simulations' / ct.patientid / 'dicoms'
+dicom_path = Path(ct.patientname)/ 'simulations' / f'{ct.patientid}' / 'dicoms'
 ct.write_to_dicom(dicom_path / 'MIDA_head_full.dcm')
+# %%
