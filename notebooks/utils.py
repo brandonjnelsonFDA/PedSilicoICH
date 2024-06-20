@@ -186,7 +186,7 @@ class CTobj():
             start_positions = start_positions[start_positions<endZ]
 
         plt.imshow(self.phantom.sum(axis=1)[::-1], cmap='gray', origin='upper', extent=[-self.phantom.shape[0]*self.spacings[0]/2, self.phantom.shape[0]*self.spacings[0]/2,
-                                                                                        self.start_positions[-1], self.start_positions[-1]+self.total_scan_length])
+                                                                                        self.start_positions[0], self.start_positions[0]+self.total_scan_length])
         plt.hlines(y=start_positions[0], xmin=-self.phantom.shape[0]*self.spacings[0]/2, xmax=self.phantom.shape[0]*self.spacings[0]/2, color='red')
         plt.annotate('Start', (0, start_positions[0]-10), horizontalalignment='center')
         
