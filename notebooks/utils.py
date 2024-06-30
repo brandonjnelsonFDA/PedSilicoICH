@@ -117,6 +117,8 @@ def initialize_xcist(ground_truth_image, spacings=(1,1,1), output_dir='default',
     print('Scanner Ready')
     return ct
 
+_table_speed = {'Low': 26.67, 'Intermediate': 48, 'High': 64} # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5711061/
+
 class CTobj():
     """
         A class to hold CT simulation data and run simulations
@@ -155,27 +157,32 @@ class CTobj():
                                       phantom_id=patientid, kVp=self.kVp)
         self.start_positions = self.calculate_start_positions()
 
-    def calculate_start_positions(self, slice_thickness=5):
+    def calculate_start_positions(self):
         # determine number of axial scans required to cover the phantom
         detector_width = self.xcist.scanner.detectorRowCount * self.xcist.scanner.detectorRowSize
         magnification = self.xcist.scanner.sdd / self.xcist.scanner.sid
         detector_width_at_isocenter = detector_width / magnification
         
         safe_width_at_isocenter = detector_width_at_isocenter - 2*self.xcist.scanner.detectorRowSize
-        valid_slices = int(safe_width_at_isocenter // slice_thickness) # remove one at each end to avoid cone beam artifacts
-        
-        self.scan_width = valid_slices*slice_thickness 
+    
+        self.scan_width = self.xcist.cfg.protocol.rotationTime * self.xcist.cfg.protocol.tableSpeed + safe_width_at_isocenter
         self.total_scan_length = self.spacings[0]*self.phantom.shape[0]
         return np.arange(-self.total_scan_length/2, self.total_scan_length/2, self.scan_width)
 
-    def scout_view(self, startZ=None, endZ=None, slice_thickness=5):
+    def scout_view(self, startZ=None, endZ=None, table_speed=0):
         '''
         Preview radiograph useful for determining scan range startZ and endZ
         :param startZ: optional starting table position in mm of the scan, see self.start_positions
         :param endZ: optional last position of scan in mm, see self.start_positions
         '''
-        self.start_positions = self.calculate_start_positions(slice_thickness)
-        start_positions = self.calculate_start_positions(slice_thickness)
+
+        if isinstance(table_speed, str):
+            self.xcist.cfg.protocol.tableSpeed = _table_speed[table_speed]
+        else:
+            self.xcist.cfg.protocol.tableSpeed = table_speed
+        
+        self.start_positions = self.calculate_start_positions()
+        start_positions = self.start_positions.copy()
         if startZ is not None:
             if startZ < start_positions.min():
                 raise ValueError(f'startZ is outside the range of valid start positions: {self.start_positions}')
@@ -186,16 +193,16 @@ class CTobj():
             start_positions = start_positions[start_positions<endZ]
 
         plt.imshow(self.phantom.sum(axis=1)[::-1], cmap='gray', origin='upper', extent=[-self.phantom.shape[0]*self.spacings[0]/2, self.phantom.shape[0]*self.spacings[0]/2,
-                                                                                        self.start_positions[0], self.start_positions[0]+self.total_scan_length])
+                                                                                        self.start_positions[0]+self.total_scan_length, self.start_positions[0]])
         plt.hlines(y=start_positions[0], xmin=-self.phantom.shape[0]*self.spacings[0]/2, xmax=self.phantom.shape[0]*self.spacings[0]/2, color='red')
         plt.annotate('Start', (0, start_positions[0]-10), horizontalalignment='center')
         
-        plt.hlines(y=start_positions[-1], xmin=-self.phantom.shape[0]*self.spacings[0]/2, xmax=self.phantom.shape[0]*self.spacings[0]/2, color='red')
-        plt.annotate('Stop', (0, start_positions[-1]+10), horizontalalignment='center')
+        plt.hlines(y=start_positions[-1] + self.scan_width, xmin=-self.phantom.shape[0]*self.spacings[0]/2, xmax=self.phantom.shape[0]*self.spacings[0]/2, color='red')
+        plt.annotate('Stop', (0, start_positions[-1]+ self.scan_width +10), horizontalalignment='center')
 
         plt.annotate(f'{len(start_positions)} scans required', xy=(0, (start_positions[0]+start_positions[-1])/2), horizontalalignment='center')
-        plt.annotate('', xy=(40, start_positions[0]), xytext=(40, start_positions[-1]), arrowprops=dict(facecolor='black', shrink=0.05))
-
+        plt.annotate('', xy=(40, start_positions[0]), xytext=(40, start_positions[-1] + self.scan_width), arrowprops=dict(facecolor='black', shrink=0.05))
+        plt.title(f'Table Speed: {self.xcist.cfg.protocol.tableSpeed} mm/s')
         plt.ylabel('scan z position [mm]')
         plt.xlabel('scan x position [mm]')
 
@@ -209,7 +216,7 @@ class CTobj():
         repr += f'\nProjections: {self.projections.shape}'
         return repr
 
-    def run_scan(self, mA=200, kVp=120, startZ=None, endZ=None, views=None, verbose=False, slice_thickness=5):
+    def run_scan(self, mA=200, kVp=120, startZ=None, endZ=None, views=None, verbose=False, table_speed=0):
         """
             Runs the CT simulation using the stored parameters.
 
@@ -222,12 +229,17 @@ class CTobj():
         """
             # update parameters and raise Value Errors if needd
         self.xcist.cfg.protocol.mA = mA
-        kVp_options = [80, 90, 100, 110, 120, 130, 140]
+        kVp_options = [70, 80, 90, 100, 110, 120, 130, 140]
         if kVp not in kVp_options:
             raise ValueError(f'Selected kVP [{kVp}] not available, please choose from {kVp_options}')
         self.xcist.cfg.protocol.spectrumFilename = f'tungsten_tar7.0_{kVp}_filt.dat'
         
-        self.start_positions = self.calculate_start_positions(slice_thickness)
+        if isinstance(table_speed, str):
+            self.xcist.cfg.protocol.tableSpeed = _table_speed[table_speed]
+        else:
+            self.xcist.cfg.protocol.tableSpeed = table_speed
+        
+        self.start_positions = self.calculate_start_positions()
         start_positions = self.start_positions
         
         if startZ:
@@ -251,14 +263,14 @@ class CTobj():
         self.xcist.cfg.experimentDirectory = str(self.results_dir)
         
         recons = []
+        projections = []
         for idx, table_position in enumerate(start_positions):
             print(f'scan: {idx+1}/{len(start_positions)}')
             self.xcist.resultsName = str(self.results_dir / f'{idx:03d}_{mA}mA_{kVp}kV') #keep projection data from each scan
             self.xcist.protocol.startZ = table_position
             self.xcist.run_all()
-            self.run_recon(sliceThickness=slice_thickness)
-            recons.append(self.recon)
-        self.recon = np.concatenate(recons, axis=0)
+            projections.append(self.xcist.resultsName)
+        self._projections = projections
         return self
 
     def run_recon(self, fov=None, sliceThickness=None, sliceCount=None, mu_water=None, preview=False):
@@ -281,8 +293,13 @@ class CTobj():
         print(f'fov size: {self.xcist.cfg.recon.fov}')
 
         self.xcist.cfg.recon.displayImagePictures = preview
-        recon.recon(self.xcist.cfg)
-        self.recon = get_reconstructed_data(self.xcist)
+
+        recons = []
+        for proj in self._projections:
+            self.xcist.resultsName = proj
+            recon.recon(self.xcist.cfg)
+            recons.append(get_reconstructed_data(self.xcist))
+        self.recon = np.concatenate(recons, axis=0)
         self.projections = get_projection_data(self.xcist)
         self.groundtruth = None
         self.I0 = self.xcist.cfg.protocol.mA
