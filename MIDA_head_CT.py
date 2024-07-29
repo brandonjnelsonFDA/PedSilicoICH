@@ -38,12 +38,45 @@ brain_mask = ground_truth_image==material_lut.loc[material_lut['xcist material']
               
 img_w_lesion, lesion_image, lesion_coords = add_random_sphere_lesion(ground_truth_image, brain_mask, radius=radius, contrast=contrast)
 # %%
+from shutil import rmtree
+output_dir = Path('MIDA Head')
+if output_dir.exists():
+    rmtree(output_dir)
+# %%    
 ct = CTobj(img_w_lesion, spacings=(dz, dx, dy), patientname='MIDA Head',
-                      studyname='full volume long scan', output_dir='MIDA Head')
+                      studyname='full volume long scan', output_dir=output_dir)
 # %%
-ct.scout_view(startZ=-95, endZ=50)
+from notebooks.utils import ctshow
+import matplotlib.pyplot as plt
+im = ctshow(ct.get_phantom()[150])
+plt.colorbar(im)
 # %%
-ct.run_scan(startZ=-95, endZ=50, views=1000)
+rangeZ = 16
+startZ = -75
+endZ = startZ + rangeZ
+print(f'{endZ - startZ} mm range')
+ct.scout_view(startZ=startZ, endZ=endZ)
+# %%
+ct.run_scan(startZ=startZ, endZ=endZ, views=100)
+# %%
+ct.run_recon()
+from notebooks.utils import ctshow
+# %%
+ctshow(ct.recon[:,256,:])
+# %%
+ctshow(ct.recon[-1])
+# %%
+ct.run_recon(fov=400)
+# %%
+ctshow(ct.recon[-1])
+# %%
+ct.run_recon(fov=250, sliceThickness=5)
+print(ct.recon.shape)
+ctshow(ct.recon[-1])
+# %%
+ct.run_recon(fov=250, sliceThickness=0.625)
+print(ct.recon.shape)
+ctshow(ct.recon[-1])
 # %%
 dicom_path = Path(ct.patientname)/ 'simulations' / f'{ct.patientid}' / 'dicoms'
 ct.write_to_dicom(dicom_path / 'MIDA_head_full.dcm')

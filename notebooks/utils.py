@@ -42,6 +42,10 @@ def ctshow(img, window='soft tissues', fig=None, ax=None):
     ax.set_yticks([])
     return ax.imshow(img, cmap='gray', vmin=wl-ww/2, vmax=wl+ww/2)
 
+def read_dicom(dcm_fname):
+    dcm = pydicom.read_file(dcm_fname)
+    return dcm.pixel_array + int(dcm.RescaleIntercept)
+
 def add_sphere(phantom:np.ndarray, center:tuple|None=None, radius:tuple|None=None):
     '''
     Returns binary sphere mask based on input phantom array and center coordinates and radii parameters
@@ -57,22 +61,32 @@ def add_sphere(phantom:np.ndarray, center:tuple|None=None, radius:tuple|None=Non
     return np.where(distance_matrix > radius**2, False, True)
 
 
-def add_random_sphere_lesion(vol, mask, radius=20, contrast=-100):
-    r = radius
+def add_random_sphere_lesion(vol:np.ndarray, mask:np.ndarray, radius:list[int]=[20], contrast:list[int]=[-100]):
+
+    if not isinstance(radius, list):
+        radius = [radius]
+    if not isinstance(contrast, list):
+        contrast = [contrast]
+    r = max(radius)
     volume = (4/3*np.pi*r**3)*0.95
-    lesion_vol = np.zeros_like(vol)
+
     counts = 0
-    while np.sum(mask & (lesion_vol==contrast)) < volume: #can increase threshold to size of lesion
+    sphere = np.zeros_like(vol, dtype=bool)
+    while np.sum(mask & sphere) < volume: #can increase threshold to size of lesion
         lesion_vol = np.zeros_like(vol)
         z, x, y = np.argwhere(mask)[np.random.randint(0, mask.sum())]
         if mask[z].sum() < np.pi*r**2:
             continue
         counts += 1
-        sphere = add_sphere(vol, center=(z, x, y), radius=radius).transpose(1, 0, 2)
-        lesion_vol[sphere]=contrast
+        sphere = add_sphere(vol, center=(z, x, y), radius=r).transpose(1, 0, 2)
         if counts > 20:
             raise ValueError("Failed to insert lesion into mask")
-
+    
+    lesion_vol = np.zeros_like(vol)
+    for ri in radius:
+        for ci in contrast:
+            sphere = add_sphere(vol, center=(z, x, y), radius=ri).transpose(1, 0, 2)
+            lesion_vol[sphere] += ci
     img_w_lesion = vol + lesion_vol
     return img_w_lesion, lesion_vol, (z, x, y)
 
@@ -169,6 +183,10 @@ class CTobj():
         self.total_scan_length = self.spacings[0]*self.phantom.shape[0]
         return np.arange(-self.total_scan_length/2, self.total_scan_length/2, self.scan_width)
 
+    def get_phantom(self):
+        gt_dicoms = list(Path(self.xcist.cfg.phantom.filename).parent.rglob('*.dcm'))
+        return np.stack([read_dicom(o) for o in gt_dicoms])
+
     def scout_view(self, startZ=None, endZ=None, table_speed=0):
         '''
         Preview radiograph useful for determining scan range startZ and endZ
@@ -258,7 +276,6 @@ class CTobj():
         
         self.results_dir = self.output_dir / 'simulations' / f'{self.patientid}'
         self.results_dir.mkdir(exist_ok=True, parents=True)    
-        self.xcist.resultsName = str(self.results_dir / f'{self.patientid}_{mA}mA_{kVp}kV')
         self.xcist.protocol.spectrumFilename = f"tungsten_tar7.0_{int(kVp)}_filt.dat" # name of the spectrum file
         self.xcist.cfg.experimentDirectory = str(self.results_dir)
         
@@ -266,10 +283,11 @@ class CTobj():
         projections = []
         for idx, table_position in enumerate(start_positions):
             print(f'scan: {idx+1}/{len(start_positions)}')
-            self.xcist.resultsName = str(self.results_dir / f'{idx:03d}_{mA}mA_{kVp}kV') #keep projection data from each scan
+            self.xcist.cfg.resultsName = str((self.results_dir / f'{idx:03d}_{mA}mA_{kVp}kV').absolute()) #keep projection data from each scan
+            self.xcist.resultsName = self.xcist.cfg.resultsName
             self.xcist.protocol.startZ = table_position
             self.xcist.run_all()
-            projections.append(self.xcist.resultsName)
+            projections.append(self.xcist.cfg.resultsName)
         self._projections = projections
         return self
 
@@ -296,7 +314,8 @@ class CTobj():
 
         recons = []
         for proj in self._projections:
-            self.xcist.resultsName = proj
+            self.xcist.cfg.resultsName = proj
+            self.xcist.resultsName = self.xcist.cfg.resultsName
             recon.recon(self.xcist.cfg)
             recons.append(get_reconstructed_data(self.xcist))
         self.recon = np.concatenate(recons, axis=0)
