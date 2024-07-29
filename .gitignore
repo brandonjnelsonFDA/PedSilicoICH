@@ -17,3 +17,7 @@ MIDA Head Phantom
 *.json
 *.csv
 default
+*.cfg
+__pycache__
+*.nrrd
+*.nii
