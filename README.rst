@@ -41,7 +41,7 @@ Tested on python 3.11.3
 Layout
 ------
 
-.. image:: model_layout.png
+.. image:: module_layout.png
         :width: 800
         :align: center
 
