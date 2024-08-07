@@ -38,6 +38,15 @@ https://github.com/bnel1201/Virtual-Patient-CT-Simulations contains the XCIST si
 
 Tested on python 3.11.3
 
+Layout
+------
+
+.. image:: module_layout.png
+        :width: 800
+        :align: center
+
+The accompanying
+
 Useful Links
 ------------
 

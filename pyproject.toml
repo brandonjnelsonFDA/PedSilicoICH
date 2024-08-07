@@ -1,0 +1,25 @@
+[project]
+name = "PedSilicoICH"
+version = "0.0.1"
+authors = [
+  { name="Brandon Nelson", email="brandon.nelson@fda.hhs.gov" },
+]
+description = "CT Simulations of virtual pediatric intracranial hemorrhage for computer aided triage device evaluation"
+readme = "README.rst"
+requires-python = ">=3.8"
+dependencies = [
+  "pandas",
+  "numpy",
+  "pydicom",
+  "pytest",
+  "gecatsim @ git+https://github.com/xcist/main.git"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/brandonjnelsonFDA/PedSilicoICH"
+Issues = "https://github.com/brandonjnelsonFDA/PedSilicoICH/issues"

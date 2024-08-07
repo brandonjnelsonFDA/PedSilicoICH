@@ -6,7 +6,9 @@ import pandas as pd
 import nibabel as nib
 import numpy as np
 
-from notebooks.utils import CTobj, add_random_sphere_lesion
+# from notebooks.utils import CTobj, add_random_sphere_lesion
+from pedsilicoICH.image_acquisition import CTobj
+from pedsilicoICH.lesion_insertion import add_random_sphere_lesion
 
 phantom_dir = Path('MIDA Head Phantom')
 img = nib.load(phantom_dir/'MIDA_v1.nii')
@@ -51,20 +53,22 @@ import matplotlib.pyplot as plt
 im = ctshow(ct.get_phantom()[150])
 plt.colorbar(im)
 # %%
-rangeZ = 16
-startZ = -75
+table_speed = 0 # Low, Medium, High
+rangeZ = 160
+startZ = -100
 endZ = startZ + rangeZ
 print(f'{endZ - startZ} mm range')
-ct.scout_view(startZ=startZ, endZ=endZ)
+ct.scout_view(startZ=startZ, endZ=endZ, table_speed=table_speed)
 # %%
-ct.run_scan(startZ=startZ, endZ=endZ, views=100)
+ct.run_scan(startZ=startZ, endZ=endZ, views=100, table_speed=table_speed)
 # %%
+ct.xcist.cfg.recon.reconType = 'fdk_equiAngle'
 ct.run_recon()
 from notebooks.utils import ctshow
 # %%
 ctshow(ct.recon[:,256,:])
 # %%
-ctshow(ct.recon[-1])
+ctshow(ct.recon[7])
 # %%
 ct.run_recon(fov=400)
 # %%
