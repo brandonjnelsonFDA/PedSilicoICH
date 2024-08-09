@@ -417,7 +417,7 @@ def DICOM_to_voxelized_phantom(phantom):
 
     # Initialize.
     phantom, dicom_filenames, volume_fraction_array, materials_dict = initialize(phantom)
-
+    dicom_filenames = sorted(dicom_filenames)
     # Generate the volume fraction maps.
     volume_fraction_array = compute_volume_fraction_array(phantom, dicom_filenames, materials_dict, volume_fraction_array)
     
