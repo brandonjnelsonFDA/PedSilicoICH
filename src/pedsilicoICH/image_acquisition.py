@@ -42,7 +42,7 @@ def get_reconstructed_data(ct):
     return xc.rawread(ct.resultsName+f'_{imsize}x{imsize}x{ct.recon.sliceCount}.raw', [ct.recon.sliceCount, imsize, imsize], 'single')
 
 
-def initialize_xcist(ground_truth_image, spacings=(1,1,1), output_dir='default', phantom_id='default', kVp=120):
+def initialize_xcist(ground_truth_image, spacings=(1,1,1), output_dir='default', phantom_id='default', materials=None):
     '''
     :param fov: in mm
     :param spacings: z, x, y in mm
@@ -78,7 +78,7 @@ def initialize_xcist(ground_truth_image, spacings=(1,1,1), output_dir='default',
         dicom_filename = dicom_path / f'1-{slice_id:03d}.dcm'    
         convert_to_dicom(img, dicom_filename, spacings=spacings)
 
-    voxelize_ground_truth(dicom_path, phantom_path)
+    voxelize_ground_truth(dicom_path, phantom_path, material_threshold_dict=materials)
     print('Scanner Ready')
     return ct
 
@@ -94,14 +94,13 @@ class CTobj():
         
         See also <https://github.com/DIDSR/pediatricIQphantoms/blob/main/src/pediatricIQphantoms/make_phantoms.py#L19>
     """
-    def __init__(self, phantom, spacings, kVp=120, patientname="default", patientid=0, age=0, studyname="default", studyid=0, seriesname="default", seriesid=0, framework='CATSIM', output_dir=None) -> None:
+    def __init__(self, phantom, spacings, patientname="default", patientid=0, age=0, studyname="default", studyid=0, seriesname="default", seriesid=0, framework='CATSIM', output_dir=None, materials:dict|None=None) -> None:
         """Constructor method
         """
         output_dir =  output_dir or f'{patientname}'
         self.output_dir = Path(output_dir)
         self.phantom=phantom
         self.spacings=spacings
-        self.kVp=kVp
         self.age=age
         self.patientname=patientname
         self.patientid=patientid
@@ -119,7 +118,7 @@ class CTobj():
         self.patient_diameter = 18
         
         self.xcist = initialize_xcist(self.phantom, self.spacings, output_dir=self.output_dir,
-                                      phantom_id=patientid, kVp=self.kVp)
+                                      phantom_id=patientid, materials=materials)
         self.start_positions = self.calculate_start_positions()
 
     def calculate_start_positions(self):
@@ -203,7 +202,7 @@ class CTobj():
         if kVp not in kVp_options:
             raise ValueError(f'Selected kVP [{kVp}] not available, please choose from {kVp_options}')
         self.xcist.cfg.protocol.spectrumFilename = f'tungsten_tar7.0_{kVp}_filt.dat'
-        
+        self.kVp = kVp
         if isinstance(table_speed, str):
             self.xcist.cfg.protocol.tableSpeed = _table_speed[table_speed]
         else:

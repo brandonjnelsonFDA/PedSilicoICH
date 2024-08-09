@@ -26,7 +26,6 @@ material_lut = pd.read_csv('notebooks/material_lut.csv')
 phantom[phantom == 50] = -1000 # air
 for idx, row in material_lut[~material_lut['CT Number [HU]'].isna()].iterrows():
     phantom[phantom==row.grayscale] = row['CT Number [HU]']
-# %%
 
 base_dir = Path('/gpfs_projects/brandon.nelson/pedsilicoICH/MIDA_analytical_sphere_ICH')
 
@@ -44,6 +43,7 @@ kVp = 120
 
 names = []
 files = []
+masks = []
 contrast_list = []
 radius_list = []
 center_x_list = []
@@ -70,28 +70,43 @@ while case_count < desired_cases:
     output_dir.mkdir(exist_ok=True, parents=True)
     ct = CTobj(img_w_lesion, spacings=(dz, dx, dy), patientname=patient_name,
                 studyname='full volume long scan', output_dir=output_dir)
-
     ct.run_scan(startZ=startZ, endZ=endZ, views=views, mA=mA, kVp=kVp)
     ct.run_recon(fov=fov)
-    dicom_path = output_dir / 'simulations' / f'{ct.patientid}' / 'dicoms'
+    dicom_path = output_dir / 'dicoms'
     dcm_files = ct.write_to_dicom(dicom_path / f'{patient_name}.dcm')
+    # figure out how to save out ground truth lesion segmentation, currently only save coordinates
+
+    lesion_only = CTobj(np.where(lesion_image > 0, 0, - 1000), spacings=(dz, dx, dy), patientname='lesion only', output_dir=Path(ct.patientname)/'lesion only', materials = {'ICRU_lung_adult_healthy':-1000, 'water': 0})
+    lesion_only.xcist.cfg.physics.energyCount = 2
+    lesion_only.xcist.cfg.physics.monochromatic = 0
+    lesion_only.xcist.cfg.physics.enableElectronicNoise = 0
+    lesion_only.xcist.cfg.physics.enableQuantumNoise = 0
+    lesion_only.run_scan(mA=500, startZ=startZ, endZ=endZ, views=100)
+    lesion_only.run_recon(fov=fov)
+    lesion_only.recon = lesion_only.recon > - 950
+
+    dicom_path = output_dir / 'lesion_masks'
+    mask_files = lesion_only.write_to_dicom(dicom_path / f'{patient_name}_mask.dcm')
     
-    for f in dcm_files:
+    for f, m in zip(dcm_files, mask_files):
         names.append(patient_name)
         files.append(f)
+        masks.append(m)
         contrast_list.append(contrast)
         radius_list.append(radius)
         center_x_list.append(lesion_coords[0])
         center_y_list.append(lesion_coords[1])
         center_z_list.append(lesion_coords[2])
     case_count += 1
+    metadata = pd.DataFrame({'name': names,
+                             'contrast': contrast_list,
+                             'radius': radius_list,
+                             'center x': center_x_list,
+                             'center y': center_y_list,
+                             'center z': center_z_list,
+                             'image file': files,
+                             'mask file': masks})
+    metadata.to_csv(base_dir / 'metadata.csv', index=False)
 # %%
-metadata = pd.DataFrame({'name': names,
-                         'contrast': contrast_list,
-                         'radius': radius_list,
-                         'center x': center_x_list,
-                         'center y': center_y_list,
-                         'center z': center_z_list})
-metadata.to_csv(base_dir / 'metadata.csv', index=False)
 metadata
 # %%<
